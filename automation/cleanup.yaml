@@ -1,0 +1,405 @@
+---
+ - name: Play_1
+   hosts: localhost
+   become: true
+   tasks:
+
+# installation steps for istio
+
+   - name: Check if istio application is installed
+     shell: kubectl get ns istio-system
+     register: istio_application_check
+     ignore_errors: true
+     tags:
+       - istio
+
+   - name: Print istio debug message
+     debug:
+       var: istio_application_check
+     tags:
+       - istio
+
+   - name: Remove istio application
+     shell: |
+            istioctl uninstall -y --purge
+            timeout 10 kubectl delete ns istio-system
+            rm /usr/local/bin/istioctl
+     timeout: 60
+     ignore_errors: true
+     tags:
+       - istio
+
+   - name: Remove istio application namespace in terminated state
+     shell: |
+            NS=`kubectl get ns |grep Terminating | awk 'NR==1 {print $1}'` && kubectl get namespace "$NS" -o json   | tr -d "\n" | sed "s/\"finalizers\": \[[^]]\+\]/\"finalizers\": []/"   | kubectl replace --raw /api/v1/namespaces/$NS/finalize -f -
+            for p in $(sudo kubectl get pod -n istio-system  | grep -i  Terminating | awk '{print $1}'); do sudo kubectl delete pod -n istio-system  $p --grace-period=0 --force;done
+     ignore_errors: true
+     register: istio
+     tags:
+       - istio
+
+   - name: Print istio debug message
+     debug:
+       var: istio
+     tags:
+       - istio
+
+# installation steps for argocd
+
+   - name: Check if argocd application is installed
+     shell: kubectl get deployment -n argocd argocd-server -o=jsonpath='{.spec.template.spec.containers[0].image}' | cut -d ":" -f2
+     register: argocd_application_check
+     ignore_errors: true
+     tags:
+       - argocd
+
+   - name: Print argocd debug message
+     debug:
+       var: argocd_application_check
+     tags:
+       - argocd
+
+   - name: Remove argocd application
+     shell: |
+            kubectl delete -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+            kubectl delete ns argocd
+     timeout: 60
+     when: argocd_application_check.rc == 0
+     ignore_errors: true
+     tags:
+       - argocd
+
+   - name: Remove argocd  application namespace in terminated state
+     shell: |
+            NS=`kubectl get ns |grep Terminating | awk 'NR==1 {print $1}'` && kubectl get namespace "$NS" -o json   | tr -d "\n" | sed "s/\"finalizers\": \[[^]]\+\]/\"finalizers\": []/"   | kubectl replace --raw /api/v1/namespaces/$NS/finalize -f -
+            for p in $(sudo kubectl get pod -n argocd | grep -i  Terminating | awk '{print $1}'); do sudo kubectl delete pod -n argocd  $p --grace-period=0 --force;done
+     ignore_errors: true
+     register: argocd
+     tags:
+       - argocd
+
+   - name: Print argocd debug message
+     debug:
+       var: argocd
+     tags:
+       - argocd
+
+# installation steps for k8s dashboard
+
+   - name: Check if k8sdashboard application is installed
+     shell: kubectl get deploy -n kubernetes-dashboard | grep -i kubernetes-dashboard  #-o=jsonpath='{.spec.template.spec.containers[0].image}' | cut -d ":" -f2
+     register: k8sdashboard_application_check
+     ignore_errors: true
+     tags:
+       - k8sdashboard
+
+   - name: Print k8sdashboard debug message
+     debug:
+       var: k8sdashboard_application_check
+     tags:
+       - k8sdashboard
+
+   - name: Remove k8sdashboard application
+     shell: |
+            NS=`kubectl get ns |grep Terminating | awk 'NR==1 {print $1}'` && kubectl get namespace "$NS" -o json   | tr -d "\n" | sed "s/\"finalizers\": \[[^]]\+\]/\"finalizers\": []/"   | kubectl replace --raw /api/v1/namespaces/$NS/finalize -f -
+            kubectl delete -f https://raw.githubusercontent.com/kubernetes/dashboard/v2.6.1/aio/deploy/recommended.yaml
+            kubectl delete -f serviceaccount.yaml
+            kubectl delete ns kubernetes-dashboard
+            #timeout=5
+            #NS=`kubectl get ns |grep Terminating | awk 'NR==1 {print $1}'` && kubectl get namespace "$NS" -o json   | tr -d "\n" | sed "s/\"finalizers\": \[[^]]\+\]/\"finalizers\": []/"   | kubectl replace --raw /api/v1/namespaces/$NS/finalize -f -
+            for p in $(sudo kubectl get pod -n kubernetes-dashboard  | grep -i  Terminating | awk '{print $1}'); do sudo kubectl delete pod -n kubernetes-dashboard  $p --grace-period=0 --force;done
+     timeout: 60
+     when: k8sdashboard_application_check.rc == 0
+     ignore_errors: true
+     tags:
+       - k8sdashboard
+
+
+   - name: Remove k8sdashboard  application namespace in terminated state
+     shell: |
+            NS=`kubectl get ns |grep Terminating | awk 'NR==1 {print $1}'` && kubectl get namespace "$NS" -o json   | tr -d "\n" | sed "s/\"finalizers\": \[[^]]\+\]/\"finalizers\": []/"   | kubectl replace --raw /api/v1/namespaces/$NS/finalize -f -
+            for p in $(sudo kubectl get pod -n  kubernetes-dashboard | grep -i  Terminating | awk '{print $1}'); do sudo kubectl delete pod -n kubernetes-dashboard  $p --grace-period=0 --force;done
+     ignore_errors: true
+     register: k8sdashboard
+     tags:
+       - k8sdashboard
+
+
+   - name: Print k8sdashboard debug message
+     debug:
+       var: k8sdashboard
+     tags:
+       - k8sdashboard
+
+# uninstallation steps for keda
+
+   - name: Check if keda application is installed
+     shell: kubectl get ns keda
+     register: keda_application_check
+     ignore_errors: true
+     tags:
+       - keda
+
+   - name: Print keda debug message
+     debug:
+       var: keda_application_check
+     tags:
+       - keda
+
+   - name: Remove keda application
+     shell: |
+            helm delete keda  --namespace keda
+            kubectl delete ns keda
+     timeout: 60
+     when: keda_application_check.rc == 0
+     register: keda
+     ignore_errors: true
+     tags:
+       - keda
+
+   - name: Remove keda application namespace in terminated state
+     shell: |
+            NS=`kubectl get ns |grep Terminating | awk 'NR==1 {print $1}'` && kubectl get namespace "$NS" -o json   | tr -d "\n" | sed "s/\"finalizers\": \[[^]]\+\]/\"finalizers\": []/"   | kubectl replace --raw /api/v1/namespaces/$NS/finalize -f -
+            for p in $(sudo kubectl get pod -n keda | grep -i  Terminating | awk '{print $1}'); do sudo kubectl delete pod -n keda  $p --grace-period=0 --force;done
+     ignore_errors: true
+     tags:
+       - keda
+
+   - name: Print keda debug message
+     debug:
+       var: keda
+     tags:
+       - keda
+
+# uninstallation steps for keycloak
+
+   - name: Check if keycloak application is installed
+     shell: kubectl  get deploy | grep -i keycloak
+     register: keycloak_application_check
+     ignore_errors: true
+     tags:
+       - keycloak
+
+   - name: Print keycloak debug message
+     debug:
+       var: keycloak_application_check
+     tags:
+       - keycloak
+
+   - name: Remove keycloak application
+     shell: |
+            kubectl delete  -f https://raw.githubusercontent.com/keycloak/keycloak-quickstarts/latest/kubernetes/keycloak.yaml
+     timeout: 60
+     when: keycloak_application_check.rc == 0
+     ignore_errors: true
+     register: keycloak
+     tags:
+       - keycloak
+
+
+   - name: Print keycloak debug message
+     debug:
+       var: keycloak
+     tags:
+       - keycloak
+
+# uninstallation steps for prometheus
+
+   - name: Check if prometheus application is installed
+     shell: kubectl get deployment -n monitoring  prometheus-operator -o=jsonpath='{.spec.template.spec.containers[0].image}' | cut -d ":" -f2
+     register: prometheus_application_check
+     ignore_errors: true
+     tags:
+       - prometheus
+
+   - name: Print prometheus debug message
+     debug:
+       var: prometheus_application_check
+     tags:
+       - prometheus
+
+   - name: Remove prometheus application
+     shell: |
+            kubectl delete -f kube-prometheus/manifests/setup
+            kubectl delete -f kube-prometheus/manifests/    
+     timeout: 60
+     when: prometheus_application_check.rc == 0
+     register: prometheus
+     ignore_errors: true
+     tags:
+       - prometheus
+
+   - name: Remove prometheus application namespace in terminated state
+     shell: |
+            NS=`kubectl get ns |grep Terminating | awk 'NR==1 {print $1}'` && kubectl get namespace "$NS" -o json   | tr -d "\n" | sed "s/\"finalizers\": \[[^]]\+\]/\"finalizers\": []/"   | kubectl replace --raw /api/v1/namespaces/$NS/finalize -f -
+     ignore_errors: true
+     tags:
+       - prometheus
+
+   - name: Print prometheus debug message
+     debug:
+       var: prometheus
+     tags:
+       - prometheus
+
+ #uninstallation steps for kubescape
+
+   - name: Check if kubescape application is installed
+     shell: which kubescape
+     ignore_errors: true
+     register: kubescape_application_check
+     tags:
+       - kubescape
+
+   - name: Print kubescape debug message
+     debug:
+       var: kubescape_application_check
+     tags:
+       - kubescape
+
+   - name: Remove kubescape application
+     shell: |
+            sudo rm /usr/local/bin/kubescape
+            rm -rf ~/.kube/kubescape
+     register: kubescape
+     when: kubescape_application_check.rc == 0
+     ignore_errors: true
+     tags:
+       - kubescape
+
+   - name: Print kubescape debug message
+     debug:
+       var: kubescape
+     tags:
+       - kubescape
+
+ #uninstallation steps for k9s
+
+   - name: Check if k9s application is installed
+     shell: which k9s
+     ignore_errors: true
+     register: k9s_application_check
+     tags:
+       - k9s
+
+   - name: Print k9s debug message
+     debug:
+       var: k9s_application_check
+     tags:
+       - k9s
+
+   - name: unInstall k9s application  
+     shell: |
+            rm -r k9s  
+            sudo rm /usr/local/bin/k9s
+     register: k9s
+     when:  k9s_application_check.rc == 0   
+     ignore_errors: true
+     tags:
+       - k9s
+
+   - name: Print k9s debug message
+     debug:
+       var: k9s
+     tags:
+       - k9s
+
+ #uninstallation steps for jaeger
+
+   - name: Check if jaeger application is installed
+     shell: kubectl get pods -n istio-system  | grep -i jaeger
+     register: jaeger_application_check
+     ignore_errors: true
+     tags:
+       - jaeger
+
+   - name: Print jaeger debug message
+     debug:
+       var: jaeger_application_check
+     tags:
+       - jaeger
+
+   - name: Installing jaeger
+     shell: |
+            kubectl delete -f https://raw.githubusercontent.com/istio/istio/release-1.18/samples/addons/jaeger.yaml
+     register: jaeger
+     when: jaeger_application_check.rc == 0
+     ignore_errors: true
+     tags:
+       - jaeger
+
+   - name: Print jaeger debug message
+     debug:
+       var: jaeger
+     tags:
+       - jaeger
+
+  #uninstallation steps for open5g
+
+   - name: Check if open5g application is installed
+     shell: helm ls | grep -i open5gs
+     register: open5g_application_check
+     ignore_errors: true
+     tags:
+       - open5g
+
+   - name: Print open5g debug message
+     debug:
+       var: open5g_application_check
+     tags:
+       - open5g
+
+   - name: Remove open5g  application
+     shell: |
+            helm uninstall ueransim-gnb
+            helm uninstall open5gs
+     timeout: 60
+     when: open5g_application_check.rc == 0
+     register: open5g
+     ignore_errors: true
+     tags:
+       - open5g
+
+   - name: Remove open5g application namespace in terminated state
+     shell: |
+            for p in $(sudo kubectl get pod | grep -i  Terminating | awk '{print $1}'); do sudo kubectl delete pod   $p --grace-period=0 --force;done
+     ignore_errors: true
+     tags:
+       - open5g
+
+   - name: Print open5g debug message
+     debug:
+       var: open5g
+     tags:
+       - open5g
+
+
+
+   # installation steps for helm
+   - name: Check if helm application is installed
+     command: "which helm"
+     register: helm_application_check
+     ignore_errors: true
+     tags:
+       - helm
+
+   - name: Print helm debug message
+     debug:
+       var: helm_application_check
+     tags:
+       - helm
+
+   - name: Remove helm application
+     shell: rm /usr/local/bin/helm && rm get_helm.sh
+     when: helm_application_check.rc == 0
+     ignore_errors: true
+     register: helm
+     tags:
+       - helm
+
+   - name: Print helm debug message
+     debug:
+       var: helm
+     tags:
+       - helm
+
